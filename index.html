@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClipboard - 共享剪切板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .toast {
+            position: fixed; top: 1.5rem; right: 1.5rem;
+            padding: 0.75rem 1.25rem; border-radius: 0.5rem;
+            color: #fff; font-size: 0.875rem; font-weight: 500;
+            opacity: 0; transform: translateY(-0.5rem);
+            transition: all 0.3s ease;
+            z-index: 50;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.success { background: #10b981; }
+        .toast.info { background: #3b82f6; }
+        .toast.error { background: #ef4444; }
+        textarea:focus { outline: none; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 via-white to-purple-50 min-h-screen">
+    <div id="toast" class="toast"></div>
+
+    <div class="max-w-2xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">📋 OpenClipboard</h1>
+            <p class="text-gray-500">实时同步 · 设备共享</p>
+        </div>
+
+        <!-- Room Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-6">
+            <div class="flex flex-col sm:flex-row items-center gap-4">
+                <!-- Current Room -->
+                <div class="flex-1 w-full">
+                    <label class="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">当前房间</label>
+                    <div class="flex items-center gap-2">
+                        <span id="currentRoom" onclick="copyRoomID()" class="text-2xl font-mono font-bold text-indigo-600 tracking-widest cursor-pointer hover:text-indigo-800 transition" title="点击复制房间号">--</span>
+                        <span id="userCount" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            0 人在线
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Join Room -->
+                <div class="flex-1 w-full">
+                    <label class="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">加入房间</label>
+                    <div class="flex gap-2">
+                        <input id="roomInput" type="text" maxlength="6" placeholder="输入房间号"
+                            style="text-transform: uppercase;"
+                            class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono tracking-wider focus:border-indigo-400 transition">
+                        <button onclick="joinRoom()" 
+                            class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 active:scale-95 transition">
+                            加入
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clipboard Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div class="flex items-center justify-between mb-3">
+                <label class="text-sm font-medium text-gray-600">共享内容</label>
+                <span id="charCount" class="text-xs text-gray-400">0 / 10000</span>
+            </div>
+            <textarea id="clipboard" rows="12" maxlength="10000" placeholder="在此输入文本，将自动同步给房间内所有人..."
+                class="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm leading-relaxed resize-y transition"></textarea>
+            
+            <div class="flex gap-3 mt-4">
+                <button onclick="copyText()"
+                    class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 active:scale-95 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                    一键复制
+                </button>
+                <button onclick="clearText()"
+                    class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 active:scale-95 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                    一键清空
+                </button>
+            </div>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="flex items-center justify-center gap-2 mt-6">
+            <span id="statusDot" class="w-2 h-2 rounded-full bg-gray-300"></span>
+            <span id="statusText" class="text-xs text-gray-400">连接中...</span>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentRoom = '';
+        let isRemoteUpdate = false;
+
+        const clipboardEl = document.getElementById('clipboard');
+        const currentRoomEl = document.getElementById('currentRoom');
+        const userCountEl = document.getElementById('userCount');
+        const charCountEl = document.getElementById('charCount');
+        const roomInputEl = document.getElementById('roomInput');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => { toast.classList.remove('show'); }, 2000);
+        }
+
+        function setStatus(connected) {
+            if (connected) {
+                statusDot.className = 'w-2 h-2 rounded-full bg-green-400';
+                statusText.textContent = '已连接';
+                statusText.className = 'text-xs text-green-500';
+            } else {
+                statusDot.className = 'w-2 h-2 rounded-full bg-red-400';
+                statusText.textContent = '已断开，正在重连...';
+                statusText.className = 'text-xs text-red-500';
+            }
+        }
+
+        function updateCharCount() {
+            const len = clipboardEl.value.length;
+            charCountEl.textContent = `${len} / 10000`;
+        }
+
+        function connect() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws`);
+
+            ws.onopen = () => {
+                setStatus(true);
+                // Auto join: create new room
+                ws.send(JSON.stringify({ type: 'join', room: '' }));
+            };
+
+            ws.onmessage = (e) => {
+                const msg = JSON.parse(e.data);
+                switch (msg.type) {
+                    case 'sync':
+                        if (msg.room) {
+                            currentRoom = msg.room;
+                            currentRoomEl.textContent = currentRoom;
+                        }
+                        isRemoteUpdate = true;
+                        clipboardEl.value = msg.content || '';
+                        isRemoteUpdate = false;
+                        updateCharCount();
+                        if (msg.users !== undefined) {
+                            userCountEl.textContent = `${msg.users} 人在线`;
+                        }
+                        break;
+                    case 'users':
+                        if (msg.users !== undefined) {
+                            userCountEl.textContent = `${msg.users} 人在线`;
+                        }
+                        break;
+                    case 'error':
+                        showToast(msg.error || '操作失败', 'error');
+                        break;
+                }
+            };
+
+            ws.onclose = () => {
+                setStatus(false);
+                setTimeout(connect, 2000);
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+        }
+
+        function joinRoom() {
+            const room = roomInputEl.value.trim().toUpperCase();
+            if (!room) {
+                showToast('请输入房间号', 'error');
+                return;
+            }
+            if (room === currentRoom) {
+                showToast('你已在该房间中', 'error');
+                return;
+            }
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showToast('连接未就绪，请稍候', 'error');
+                return;
+            }
+            ws.send(JSON.stringify({ type: 'join', room: room }));
+            roomInputEl.value = '';
+            showToast(`正在加入房间 ${room}`, 'info');
+        }
+
+        // Enter key to join room
+        roomInputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') joinRoom();
+        });
+
+        // Text input with debounce
+        let debounceTimer = null;
+        clipboardEl.addEventListener('input', () => {
+            updateCharCount();
+            if (isRemoteUpdate) return;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'update', content: clipboardEl.value }));
+                }
+            }, 150);
+        });
+
+        function copyRoomID() {
+            if (!currentRoom || currentRoom === '--') return;
+            navigator.clipboard.writeText(currentRoom).then(() => {
+                showToast('房间号已复制', 'success');
+            }).catch(() => {
+                showToast('复制失败', 'error');
+            });
+        }
+
+        function copyText() {
+            const text = clipboardEl.value;
+            if (!text) {
+                showToast('没有可复制的内容', 'error');
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('已复制到剪切板', 'success');
+            }).catch(() => {
+                // Fallback
+                clipboardEl.select();
+                document.execCommand('copy');
+                showToast('已复制到剪切板', 'success');
+            });
+        }
+
+        function clearText() {
+            clipboardEl.value = '';
+            updateCharCount();
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'update', content: '' }));
+            }
+            showToast('已清空', 'info');
+        }
+
+        // Start connection
+        connect();
+    </script>
+</body>
+</html>
