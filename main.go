@@ -1,10 +1,11 @@
 package main
 
 import (
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"math/rand"
 	"net/http"
@@ -15,8 +16,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-//go:embed index.html
-var indexHTML []byte
+//go:embed public
+var publicFS embed.FS
 
 // Message represents a WebSocket message
 type Message struct {
@@ -229,11 +230,12 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
+	sub, err := fs.Sub(publicFS, "public")
+	if err != nil {
+		log.Fatal(err)
+	}
 	http.HandleFunc("/ws", handleWebSocket)
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(indexHTML)
-	})
+	http.Handle("/", http.FileServer(http.FS(sub)))
 
 	port := flag.Int("port", 8080, "listening port")
 	flag.Parse()

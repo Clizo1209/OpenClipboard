@@ -1,1 +1,4 @@
 build/
+client/build/
+public/client/*
+!public/client/.gitkeep

@@ -1,96 +1,144 @@
 @echo off
 setlocal
 
-set PROJECT=openclipboard
+set SERVER=openclipboard
+set CLIENT=opencb-client
 set FLAGS=-ldflags="-s -w" -trimpath -buildvcs=false
 set OUTDIR=build
+set CLIENTOUT=public\client
 
-if exist %OUTDIR% rd /s /q %OUTDIR%
-mkdir %OUTDIR%
+if not exist %OUTDIR%    mkdir %OUTDIR%
+if not exist %CLIENTOUT% mkdir %CLIENTOUT%
 
 echo ========================================
-echo  OpenClipboard Multi-Platform Build
+echo  Step 1: Build CLI clients
 echo ========================================
 echo.
 
-:: Windows amd64
-echo [1/8] Building windows/amd64...
+pushd client
+
+set CGO_ENABLED=0
+
+echo [1/8] Client windows/amd64...
 set GOOS=windows
 set GOARCH=amd64
-go build %FLAGS% -o %OUTDIR%\%PROJECT%-windows-amd64.exe main.go
-if %errorlevel% neq 0 echo FAILED! & goto :next1
-echo       OK
-:next1
+go build %FLAGS% -o ..\%CLIENTOUT%\%CLIENT%-windows-amd64.exe .
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
 
-:: Windows arm64
-echo [2/8] Building windows/arm64...
+echo [2/8] Client windows/arm64...
 set GOOS=windows
 set GOARCH=arm64
-go build %FLAGS% -o %OUTDIR%\%PROJECT%-windows-arm64.exe main.go
-if %errorlevel% neq 0 echo FAILED! & goto :next2
-echo       OK
-:next2
+go build %FLAGS% -o ..\%CLIENTOUT%\%CLIENT%-windows-arm64.exe .
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
 
-:: Linux amd64
-echo [3/8] Building linux/amd64...
+echo [3/8] Client linux/amd64...
 set GOOS=linux
 set GOARCH=amd64
-go build %FLAGS% -o %OUTDIR%\%PROJECT%-linux-amd64 main.go
-if %errorlevel% neq 0 echo FAILED! & goto :next3
-echo       OK
-:next3
+go build %FLAGS% -o ..\%CLIENTOUT%\%CLIENT%-linux-amd64 .
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
 
-:: Linux arm64
-echo [4/8] Building linux/arm64...
+echo [4/8] Client linux/arm64...
 set GOOS=linux
 set GOARCH=arm64
-go build %FLAGS% -o %OUTDIR%\%PROJECT%-linux-arm64 main.go
-if %errorlevel% neq 0 echo FAILED! & goto :next4
-echo       OK
-:next4
+go build %FLAGS% -o ..\%CLIENTOUT%\%CLIENT%-linux-arm64 .
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
 
-:: Linux arm (ARMv7)
-echo [5/8] Building linux/arm (v7)...
+echo [5/8] Client linux/armv7...
 set GOOS=linux
 set GOARCH=arm
 set GOARM=7
-go build %FLAGS% -o %OUTDIR%\%PROJECT%-linux-armv7 main.go
-if %errorlevel% neq 0 echo FAILED! & goto :next5
-echo       OK
-:next5
+go build %FLAGS% -o ..\%CLIENTOUT%\%CLIENT%-linux-armv7 .
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
 set GOARM=
 
-:: macOS amd64
-echo [6/8] Building darwin/amd64...
+echo [6/8] Client darwin/amd64...
 set GOOS=darwin
 set GOARCH=amd64
-go build %FLAGS% -o %OUTDIR%\%PROJECT%-darwin-amd64 main.go
-if %errorlevel% neq 0 echo FAILED! & goto :next6
-echo       OK
-:next6
+go build %FLAGS% -o ..\%CLIENTOUT%\%CLIENT%-darwin-amd64 .
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
 
-:: macOS arm64 (Apple Silicon)
-echo [7/8] Building darwin/arm64...
+echo [7/8] Client darwin/arm64...
 set GOOS=darwin
 set GOARCH=arm64
-go build %FLAGS% -o %OUTDIR%\%PROJECT%-darwin-arm64 main.go
-if %errorlevel% neq 0 echo FAILED! & goto :next7
-echo       OK
-:next7
+go build %FLAGS% -o ..\%CLIENTOUT%\%CLIENT%-darwin-arm64 .
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
 
-:: FreeBSD amd64
-echo [8/8] Building freebsd/amd64...
+echo [8/8] Client freebsd/amd64...
 set GOOS=freebsd
 set GOARCH=amd64
-go build %FLAGS% -o %OUTDIR%\%PROJECT%-freebsd-amd64 main.go
-if %errorlevel% neq 0 echo FAILED! & goto :done
-echo       OK
+go build %FLAGS% -o ..\%CLIENTOUT%\%CLIENT%-freebsd-amd64 .
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
 
-:done
+set GOOS=
+set GOARCH=
+set CGO_ENABLED=
+
+popd
+
 echo.
 echo ========================================
-echo  Build complete! Output: %OUTDIR%\
+echo  Step 2: Build server (embeds public/)
 echo ========================================
-dir /b %OUTDIR%
+echo.
+
+echo [1/8] Server windows/amd64...
+set GOOS=windows
+set GOARCH=amd64
+go build %FLAGS% -o %OUTDIR%\%SERVER%-windows-amd64.exe main.go
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
+
+echo [2/8] Server windows/arm64...
+set GOOS=windows
+set GOARCH=arm64
+go build %FLAGS% -o %OUTDIR%\%SERVER%-windows-arm64.exe main.go
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
+
+echo [3/8] Server linux/amd64...
+set GOOS=linux
+set GOARCH=amd64
+go build %FLAGS% -o %OUTDIR%\%SERVER%-linux-amd64 main.go
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
+
+echo [4/8] Server linux/arm64...
+set GOOS=linux
+set GOARCH=arm64
+go build %FLAGS% -o %OUTDIR%\%SERVER%-linux-arm64 main.go
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
+
+echo [5/8] Server linux/armv7...
+set GOOS=linux
+set GOARCH=arm
+set GOARM=7
+go build %FLAGS% -o %OUTDIR%\%SERVER%-linux-armv7 main.go
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
+set GOARM=
+
+echo [6/8] Server darwin/amd64...
+set GOOS=darwin
+set GOARCH=amd64
+go build %FLAGS% -o %OUTDIR%\%SERVER%-darwin-amd64 main.go
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
+
+echo [7/8] Server darwin/arm64...
+set GOOS=darwin
+set GOARCH=arm64
+go build %FLAGS% -o %OUTDIR%\%SERVER%-darwin-arm64 main.go
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
+
+echo [8/8] Server freebsd/amd64...
+set GOOS=freebsd
+set GOARCH=amd64
+go build %FLAGS% -o %OUTDIR%\%SERVER%-freebsd-amd64 main.go
+if %errorlevel% neq 0 (echo FAILED!) else (echo       OK)
+
+set GOOS=
+set GOARCH=
+
+echo.
+echo ========================================
+echo  Build complete!
+echo   Clients : %CLIENTOUT%\
+echo   Servers : %OUTDIR%\
+echo ========================================
 
 endlocal
